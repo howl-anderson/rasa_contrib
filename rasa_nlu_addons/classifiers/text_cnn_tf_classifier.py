@@ -3,23 +3,25 @@ import os
 import shutil
 import tempfile
 import typing
-from typing import Any, Dict, List, Optional, Text, Tuple
+from typing import Any, Dict, Optional, Text
 
+from rasa_nlu.components import Component
 from rasa_nlu.config import InvalidConfigError, RasaNLUModelConfig
-from rasa_nlu.extractors import EntityExtractor
-from rasa_nlu.model import Metadata
 from rasa_nlu.training_data import Message, TrainingData
 
 logger = logging.getLogger(__name__)
 
 if typing.TYPE_CHECKING:
-    import sklearn_crfsuite
+    from rasa_nlu.config import RasaNLUModelConfig
+    from rasa_nlu.training_data import TrainingData
+    from rasa_nlu.model import Metadata
+    from rasa_nlu.training_data import Message
 
 
-class BilstmCrfEntityExtractor(EntityExtractor):
-    name = "addons_ner_bilstm_crf"
+class TextCnnTensorFlowClassifier(Component):
+    name = "addons_intent_classifier_textcnn_tf"
 
-    provides = ["entities"]
+    provides = ["intent", "intent_ranking"]
 
     requires = ["addons_tf_input_fn", "addons_tf_input_meta"]
 
@@ -27,25 +29,25 @@ class BilstmCrfEntityExtractor(EntityExtractor):
                  component_config: Optional[Dict[Text, Any]] = None,
                  model_dir=None) -> None:
 
-        self.result_dir = None if 'result_dir' not in component_config else component_config['result_dir']
+        self.result_dir = None if 'result_dir' not in component_config else \
+        component_config['result_dir']
 
         self.predict_fn = None
         self.model_dir = model_dir
 
-        super(BilstmCrfEntityExtractor, self).__init__(component_config)
+        super(TextCnnTensorFlowClassifier, self).__init__(component_config)
 
     @classmethod
     def required_packages(cls):
-        return ["tensorflow", "seq2annotation"]
+        return ["tensorflow", "seq2label"]
 
     def train(self,
               training_data: TrainingData,
               config: RasaNLUModelConfig,
               **kwargs: Any) -> None:
 
-        from seq2annotation.input import generate_tagset
-        from seq2annotation.input import build_input_func
-        from seq2annotation.model import Model
+        from seq2label.input import build_input_func
+        from seq2label.model import Model
 
         raw_config = config.for_component(self.name)
 
@@ -65,7 +67,10 @@ class BilstmCrfEntityExtractor(EntityExtractor):
         train_data_generator_func = kwargs.get('addons_tf_input_fn')
         corpus_meta_data = kwargs.get('addons_tf_input_meta')
 
-        config['tags_data'] = generate_tagset(corpus_meta_data['tags'])
+        config['tags_data'] = corpus_meta_data['label']
+        config['num_classes'] = len(config['tags_data'])
+
+        print('')
 
         # build model according configure
 
@@ -74,6 +79,27 @@ class BilstmCrfEntityExtractor(EntityExtractor):
 
         # train and evaluate model
         train_input_func = build_input_func(train_data_generator_func, config)
+
+        # train_iterator = train_input_func()
+        # import tensorflow as tf
+        # import sys
+        #
+        # with tf.Session() as sess:
+        #     sess.run(tf.tables_initializer())
+        #
+        #     counter = 0
+        #     while True:
+        #         try:
+        #             value = sess.run(train_iterator[0]['words'])
+        #             counter += 1
+        #             print(value)
+        #             break
+        #         except tf.errors.OutOfRangeError:
+        #             break
+        #
+        # print(counter)
+        # #
+        # sys.exit(0)
 
         evaluate_result, export_results, final_saved_model = model.train_and_eval_then_save(
             train_input_func,
@@ -87,10 +113,10 @@ class BilstmCrfEntityExtractor(EntityExtractor):
 
     @classmethod
     def load(cls,
-             model_dir=None,   # type: Optional[Text]
-             model_metadata=None,   # type: Optional[Metadata]
-             cached_component=None,   # type: Optional[Component]
-             **kwargs  # type: Any
+             model_dir=None,  # type: Optional[Text]
+             model_metadata=None,  # type: Optional[Metadata]
+             cached_component=None,  # type: Optional[Component]
+             **kwargs
              ):
         # type: (...) -> Component
         """Load this component from file.
@@ -110,9 +136,7 @@ class BilstmCrfEntityExtractor(EntityExtractor):
 
     def process(self, message: Message, **kwargs: Any) -> None:
         from tensorflow.contrib import predictor
-        from tokenizer_tools.tagset.NER.BILUO import BILUOSequenceEncoderDecoder
-
-        decoder = BILUOSequenceEncoderDecoder()
+        from seq2label.input import to_fixed_len
 
         real_result_dir = os.path.join(self.model_dir, self.result_dir)
         print(real_result_dir)
@@ -123,57 +147,24 @@ class BilstmCrfEntityExtractor(EntityExtractor):
         input_text = message.text
 
         input_feature = {
-            'words': [[i for i in input_text]],
-            'words_len': [len(input_text)],
+            'words': [to_fixed_len([i for i in input_text], 20, '<pad>')],
         }
 
         print(input_feature)
 
         predictions = self.predict_fn(input_feature)
-        tags = predictions['tags'][0]
-        # print(predictions['tags'])
+        label = predictions['label'][0].decode()
 
-        # decode Unicode
-        tags_seq = [i.decode() for i in tags]
+        intent = {"name": label,
+                  "confidence": 1}
 
-        print(tags_seq)
+        ranking = zip([i.decode() for i in predictions['label_mapping']], [float(i) for i in predictions['label_prob'][0]])
+        intent_ranking = [{"name": name,
+                           "confidence": score}
+                          for name, score in ranking]
 
-        # BILUO to offset
-        failed = False
-        try:
-            seq = decoder.to_offset(tags_seq, input_text)
-        except:
-            # if not raise_exception:
-            #     # invalid tag sequence will raise exception
-            #     # so return a empty result
-            #     seq = Sequence(input_text)
-            #     failed = True
-            # else:
-            raise
-        # print(seq)
-
-        print(seq, tags_seq, failed)
-
-        entity_set = []
-
-        seq.span_set.fill_text(input_text)
-
-        for span in seq.span_set:
-            ent = {
-                "entity": span.entity,
-                "value": span.value,
-                "start": span.start,
-                "confidence": None,
-                "end": span.end
-            }
-
-            entity_set.append(ent)
-
-        extracted = self.add_extractor_name(entity_set)
-
-        message.set("entities",
-                    message.get("entities", []) + extracted,
-                    add_to_output=True)
+        message.set("intent", intent, add_to_output=True)
+        message.set("intent_ranking", intent_ranking, add_to_output=True)
 
     def persist(self,
                 model_dir: Text) -> Optional[Dict[Text, Any]]:

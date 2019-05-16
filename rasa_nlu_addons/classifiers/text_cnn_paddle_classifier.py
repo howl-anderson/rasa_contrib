@@ -18,12 +18,12 @@ if typing.TYPE_CHECKING:
     from rasa_nlu.training_data import Message
 
 
-class TextCnnClassifier(Component):
-    name = "addons_intent_classifier_textcnn"
+class TextCnnPaddleClassifier(Component):
+    name = "addons_intent_classifier_textcnn_paddle"
 
     provides = ["intent", "intent_ranking"]
 
-    requires = ["addons_tf_input_fn", "addons_tf_input_meta"]
+    requires = ["addons_paddle_input_fn", "addons_paddle_input_meta"]
 
     def __init__(self,
                  component_config: Optional[Dict[Text, Any]] = None,
@@ -35,19 +35,18 @@ class TextCnnClassifier(Component):
         self.predict_fn = None
         self.model_dir = model_dir
 
-        super(TextCnnClassifier, self).__init__(component_config)
+        super(TextCnnPaddleClassifier, self).__init__(component_config)
 
     @classmethod
     def required_packages(cls):
-        return ["tensorflow", "seq2label"]
+        return ["paddle", "seq2label"]
 
     def train(self,
               training_data: TrainingData,
               config: RasaNLUModelConfig,
               **kwargs: Any) -> None:
 
-        from seq2label.input import build_input_func
-        from seq2label.model import Model
+        from seq2label.trainer.paddle_train import Train
 
         raw_config = config.for_component(self.name)
 
@@ -56,58 +55,16 @@ class TextCnnClassifier(Component):
         if 'result_dir' not in raw_config:
             raw_config['result_dir'] = tempfile.mkdtemp()
 
-        model = Model(raw_config)
-
-        config = model.get_default_config()
-        config.update(raw_config)
-
-        # task_status = TaskStatus(config)
-
         # read data according configure
-        train_data_generator_func = kwargs.get('addons_tf_input_fn')
-        corpus_meta_data = kwargs.get('addons_tf_input_meta')
+        raw_config['data_source_scheme'] = 'raw'
+        raw_config['corpus_train_input_func'] = kwargs.get(
+            'addons_paddle_input_fn')
+        raw_config['corpus_eval_input_func'] = None
+        raw_config['corpus_meta_info'] = kwargs.get('addons_paddle_input_meta')
 
-        config['tags_data'] = corpus_meta_data['label']
-        config['num_classes'] = len(config['tags_data'])
-
-        print('')
-
-        # build model according configure
-
-        # send START status to monitor system
-        # task_status.send_status(task_status.START)
-
-        # train and evaluate model
-        train_input_func = build_input_func(train_data_generator_func, config)
-
-        # train_iterator = train_input_func()
-        # import tensorflow as tf
-        # import sys
-        #
-        # with tf.Session() as sess:
-        #     sess.run(tf.tables_initializer())
-        #
-        #     counter = 0
-        #     while True:
-        #         try:
-        #             value = sess.run(train_iterator[0]['words'])
-        #             counter += 1
-        #             print(value)
-        #             break
-        #         except tf.errors.OutOfRangeError:
-        #             break
-        #
-        # print(counter)
-        # #
-        # sys.exit(0)
-
-        evaluate_result, export_results, final_saved_model = model.train_and_eval_then_save(
-            train_input_func,
-            None,
-            config
-        )
-
-        # task_status.send_status(task_status.DONE)
+        train = Train()
+        final_saved_model = train.train(addition_config=raw_config,
+                                        return_empty=True)
 
         self.result_dir = final_saved_model
 
@@ -135,33 +92,25 @@ class TextCnnClassifier(Component):
             return cls(component_config, model_dir)
 
     def process(self, message: Message, **kwargs: Any) -> None:
-        from tensorflow.contrib import predictor
-        from seq2label.input import to_fixed_len
+        from seq2label.server.paddle_inference import Inference
 
         real_result_dir = os.path.join(self.model_dir, self.result_dir)
         print(real_result_dir)
 
+        # for cache
         if not self.predict_fn:
-            self.predict_fn = predictor.from_saved_model(real_result_dir)
+            self.predict_fn = Inference(real_result_dir)
 
         input_text = message.text
 
-        input_feature = {
-            'words': [to_fixed_len([i for i in input_text], 20, '<pad>')],
-        }
+        best_result, candidate_ranking = self.predict_fn.infer(input_text)
 
-        print(input_feature)
+        intent = {"name": best_result,
+                  "confidence": candidate_ranking[0][1]}
 
-        predictions = self.predict_fn(input_feature)
-        label = predictions['label'][0].decode()
-
-        intent = {"name": label,
-                  "confidence": 1}
-
-        ranking = zip([i.decode() for i in predictions['label_mapping']], [float(i) for i in predictions['label_prob'][0]])
         intent_ranking = [{"name": name,
                            "confidence": score}
-                          for name, score in ranking]
+                          for name, score in candidate_ranking]
 
         message.set("intent", intent, add_to_output=True)
         message.set("intent_ranking", intent_ranking, add_to_output=True)
