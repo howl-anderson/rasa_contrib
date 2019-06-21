@@ -64,7 +64,6 @@ pytz==2018.9
 PyYAML==5.1
 rarfile==3.0
 rasa-nlu==0.14.6
--e git+git@github.com:howl-anderson/rasa_nlu_addons.git@47e2cc2889646a755e89c5fc34b54d3576354582#egg=rasa_nlu_addons
 recordio==0.1.7
 regex==2019.4.14
 requests==2.9.2
