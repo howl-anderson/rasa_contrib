@@ -1,7 +1,5 @@
 # rasa_contrib
 
-![work in progress](.media/work-in-progress.jpg)
-
 rasa_contrib is a addon package for [rasa](https://github.com/RasaHQ/rasa). It provide some useful/powerful addition component.
 
 ## component
