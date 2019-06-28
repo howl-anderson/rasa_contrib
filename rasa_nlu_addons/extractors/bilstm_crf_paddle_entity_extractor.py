@@ -5,10 +5,10 @@ import tempfile
 import typing
 from typing import Any, Dict, Optional, Text
 
-from rasa_nlu.config import RasaNLUModelConfig
-from rasa_nlu.extractors import EntityExtractor
-from rasa_nlu.model import Metadata
-from rasa_nlu.training_data import Message, TrainingData
+from rasa.nlu.config import RasaNLUModelConfig
+from rasa.nlu.extractors import EntityExtractor
+from rasa.nlu.model import Metadata
+from rasa.nlu.training_data import Message, TrainingData
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ class BilstmCrfPaddleEntityExtractor(EntityExtractor):
               **kwargs: Any) -> None:
         from seq2annotation.trainer.paddle_train import Train
 
-        raw_config = config.for_component(self.name)
+        raw_config = self.component_config
 
         print(raw_config)
 
@@ -63,27 +63,18 @@ class BilstmCrfPaddleEntityExtractor(EntityExtractor):
         self.result_dir = final_saved_model
 
     @classmethod
-    def load(cls,
-             model_dir=None,  # type: Optional[Text]
-             model_metadata=None,  # type: Optional[Metadata]
-             cached_component=None,  # type: Optional[Component]
-             **kwargs  # type: Any
-             ):
-        # type: (...) -> Component
-        """Load this component from file.
-
-        After a component has been trained, it will be persisted by
-        calling `persist`. When the pipeline gets loaded again,
-        this component needs to be able to restore itself.
-        Components can rely on any context attributes that are
-        created by :meth:`components.Component.pipeline_init`
-        calls to components previous
-        to this one."""
+    def load(
+        cls,
+        meta: Dict[Text, Any],
+        model_dir: Optional[Text] = None,
+        model_metadata: Optional["Metadata"] = None,
+        cached_component: Optional["Component"] = None,
+        **kwargs: Any
+    ) -> "Component":
         if cached_component:
             return cached_component
         else:
-            component_config = model_metadata.for_component(cls.name)
-            return cls(component_config, model_dir)
+            return cls(meta, model_dir)
 
     def process(self, message: Message, **kwargs: Any) -> None:
         from seq2annotation.server.paddle_inference import Inference
@@ -117,8 +108,7 @@ class BilstmCrfPaddleEntityExtractor(EntityExtractor):
                     message.get("entities", []) + extracted,
                     add_to_output=True)
 
-    def persist(self,
-                model_dir: Text) -> Optional[Dict[Text, Any]]:
+    def persist(self, file_name: Text, model_dir: Text) -> Optional[Dict[Text, Any]]:
         """Persist this model into the passed directory.
 
         Returns the metadata necessary to load the model again."""
