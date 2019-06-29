@@ -8,5 +8,6 @@ setup(
     license='Apache 2.0',
     author='Xiaoquan Kong',
     author_email='u1mail2me@gmail.com',
-    description='Addons for Rasa'
+    description='Addons for Rasa',
+    install_requires=["paddle", "seq2label", "tensorflow", "seq2annotation", "MicroTokenizer"]
 )
