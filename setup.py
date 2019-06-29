@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='rasa_contrib',
-    version='0.1.1',
+    version='0.1.2',
     packages=find_packages(),
     url='https://github.com/howl-anderson/rasa_contrib',
     license='Apache 2.0',
