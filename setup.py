@@ -9,5 +9,5 @@ setup(
     author='Xiaoquan Kong',
     author_email='u1mail2me@gmail.com',
     description='Addons for Rasa',
-    install_requires=["paddle", "seq2label", "tensorflow", "seq2annotation", "MicroTokenizer"]
+    install_requires=["paddlepaddle", "seq2label", "tensorflow", "seq2annotation", "MicroTokenizer"]
 )
