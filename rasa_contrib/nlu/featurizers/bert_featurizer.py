@@ -55,12 +55,12 @@ class BertTextFeaturizer(Featurizer):
         embedding_vector_list = self.bert_client.encode(text_list,
                                                         is_tokenized=False)
 
-        return np.squeeze(embedding_vector_list)
+        return embedding_vector_list
 
     def train(self, training_data, cfg=None, **kwargs):
         batch_iterator = BatchingIterator(self.component_config['batch_size'])
 
-        for batch_examples in batch_iterator(training_data):
+        for batch_examples in batch_iterator(training_data.training_examples):
             embedding_vector_list = self._query_embedding_vector(
                 batch_examples)
 
@@ -74,7 +74,7 @@ class BertTextFeaturizer(Featurizer):
 
     def process(self, message, **kwargs):
         # type: (Message, **Any) -> None
-        embedding_vector = self._query_embedding_vector([message])
+        embedding_vector = self._query_embedding_vector([message])[0]
 
         text_features = self._combine_with_existing_text_features(
             message,
