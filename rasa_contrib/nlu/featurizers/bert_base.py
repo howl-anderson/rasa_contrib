@@ -6,8 +6,6 @@ from __future__ import unicode_literals
 import logging
 from typing import Any
 
-import numpy as np
-
 from rasa.nlu.featurizers import Featurizer
 from rasa.nlu.training_data import Message
 from rasa_contrib.utils.trainning import BatchingIterator
@@ -15,8 +13,12 @@ from rasa_contrib.utils.trainning import BatchingIterator
 logger = logging.getLogger(__name__)
 
 
-class BertTextFeaturizer(Featurizer):
-    provides = ["text_features"]
+class BertBase(Featurizer):
+    # Notice: need be implemented in subclass
+    provides = []
+
+    # Notice: need be implemented in subclass
+    name = ""
 
     defaults = {
         "ip": 'localhost',
@@ -35,7 +37,7 @@ class BertTextFeaturizer(Featurizer):
         return ["bert_serving"]
 
     def __init__(self, component_config=None):
-        super(BertTextFeaturizer, self).__init__(component_config)
+        super(BertBase, self).__init__(component_config)
         from bert_serving.client import ConcurrentBertClient
 
         self.bert_client = ConcurrentBertClient(
@@ -61,24 +63,23 @@ class BertTextFeaturizer(Featurizer):
         batch_iterator = BatchingIterator(self.component_config['batch_size'])
 
         for batch_examples in batch_iterator(training_data.training_examples):
-            embedding_vector_list = self._query_embedding_vector(
-                batch_examples)
-
-            for i, example in enumerate(batch_examples):
-                example.set(
-                    "text_features",
-                    self._combine_with_existing_text_features(example,
-                                                              embedding_vector_list[
-                                                                  i])
-                )
+            self._do_process(batch_examples)
 
     def process(self, message, **kwargs):
         # type: (Message, **Any) -> None
-        embedding_vector = self._query_embedding_vector([message])[0]
+        batch_example = [message]
 
-        text_features = self._combine_with_existing_text_features(
-            message,
-            embedding_vector
-        )
+        self._do_process(batch_example)
 
-        message.set("text_features", text_features)
+    def _do_process(self, batch_example):
+        batch_feature = self._query_embedding_vector(batch_example)
+
+        assert len(batch_example) == batch_feature.shape[0], "batch_example and first dim of batch_feature must have same size"
+
+        for i, example in enumerate(batch_example):
+            feature = batch_feature[i]
+
+            self._set_feature(example, feature)
+
+    def _set_feature(self, example, feature):
+        raise NotImplementedError
