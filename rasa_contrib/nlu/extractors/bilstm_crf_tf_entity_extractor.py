@@ -101,6 +101,7 @@ class BilstmCrfTensorFlowEntityExtractor(EntityExtractor):
     def process(self, message: Message, **kwargs: Any) -> None:
         from tensorflow.contrib import predictor
         from tokenizer_tools.tagset.NER.BILUO import BILUOSequenceEncoderDecoder
+        from tokenizer_tools.tagset.offset.sequence import Sequence
 
         decoder = BILUOSequenceEncoderDecoder()
 
@@ -132,14 +133,12 @@ class BilstmCrfTensorFlowEntityExtractor(EntityExtractor):
         failed = False
         try:
             seq = decoder.to_offset(tags_seq, input_text)
-        except:
-            # if not raise_exception:
-            #     # invalid tag sequence will raise exception
-            #     # so return a empty result
-            #     seq = Sequence(input_text)
-            #     failed = True
-            # else:
-            raise
+        except Exception as e:
+            # invalid tag sequence will raise exception
+            # so return a empty result
+            logger.error("Decode error: {}".format(e))
+            seq = Sequence(input_text)
+            failed = True
         # print(seq)
 
         print(seq, tags_seq, failed)
