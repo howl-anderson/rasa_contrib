@@ -9,11 +9,13 @@ from rasa.nlu.config import InvalidConfigError, RasaNLUModelConfig
 from rasa.nlu.extractors import EntityExtractor
 from rasa.nlu.model import Metadata
 from rasa.nlu.training_data import Message, TrainingData
-
-logger = logging.getLogger(__name__)
+from tokenizer_tools.tagset.converter.offset_to_biluo import offset_to_biluo
 
 if typing.TYPE_CHECKING:
+    from tokenizer_tools.tagset.offset.sequence import Sequence
     import sklearn_crfsuite
+
+logger = logging.getLogger(__name__)
 
 
 class BilstmCrfTensorFlowEntityExtractor(EntityExtractor):
@@ -37,6 +39,79 @@ class BilstmCrfTensorFlowEntityExtractor(EntityExtractor):
     @classmethod
     def required_packages(cls):
         return ["tensorflow", "seq2annotation"]
+
+    def _keras_data_preprocss(self, data: 'List[Sequence]', tag_lookuper, maxlen=None):
+        import tensorflow as tf
+
+        raw_x = []
+        raw_y = []
+
+        for intent_data in data:
+            offset_data = intent_data
+            tags = offset_to_biluo(offset_data)
+            words = offset_data.text
+
+            tag_ids = [tag_lookuper.lookup(i) for i in tags]
+            word_ids = ''.join(words)
+
+            raw_x.append(word_ids)
+            raw_y.append(tag_ids)
+
+        if maxlen is None:
+            maxlen = max(len(s) for s in raw_x)
+
+        x = get_np_feature(raw_x, maxlen)
+
+        y = tf.keras.preprocessing.sequence.pad_sequences(raw_y, maxlen, value=0, padding='post')
+
+        return x, y
+
+    def _keras_train(
+        self, training_data: TrainingData, cfg: RasaNLUModelConfig, **kwargs: Any
+    ) -> None:
+        from tensorflow.python.keras.layers import Input, Masking
+        from tensorflow.python.keras.models import Sequential
+        from tf_crf_layer.layer import CRF
+        from tf_crf_layer.loss import crf_loss
+        from tf_crf_layer.metrics import crf_accuracy
+        from seq2annotation.input import generate_tagset
+        from seq2annotation.input import build_input_func
+        from seq2annotation.input import Lookuper
+
+        config = self.component_config
+
+        if 'result_dir' not in config:
+            config['result_dir'] = tempfile.mkdtemp()
+
+        # read data according configure
+        train_data_generator_func = kwargs.get('addons_tf_input_fn')
+        corpus_meta_data = kwargs.get('addons_tf_input_meta')
+
+        config['tags_data'] = generate_tagset(corpus_meta_data['tags'])
+
+        # train and evaluate model
+        train_input_func = build_input_func(train_data_generator_func, config)
+
+        tag_lookuper = Lookuper({v: i for i, v in enumerate(config['tags_data'])})
+
+        maxlen = 25
+
+        offset_data = train_input_func()
+        train_x, train_y = self._keras_data_preprocss(offset_data, tag_lookuper, maxlen)
+
+        EPOCHS = 1
+
+        tag_size = tag_lookuper.size()
+
+        model = Sequential()
+        model.add(Input(shape=(25, 768)))
+        model.add(Masking())
+        model.add(CRF(tag_size))
+        model.compile('adam', loss=crf_loss)
+        model.summary()
+
+        model.compile('adam', loss=crf_loss, metrics=[crf_accuracy])
+        model.fit(train_x, train_y, epochs=EPOCHS)
 
     def train(
         self, training_data: TrainingData, cfg: RasaNLUModelConfig, **kwargs: Any
@@ -83,6 +158,17 @@ class BilstmCrfTensorFlowEntityExtractor(EntityExtractor):
         # task_status.send_status(task_status.DONE)
 
         self.result_dir = final_saved_model
+
+    @classmethod
+    def _keras_load(
+        cls,
+        meta: Dict[Text, Any],
+        model_dir: Optional[Text] = None,
+        model_metadata: Optional["Metadata"] = None,
+        cached_component: Optional["Component"] = None,
+        **kwargs: Any
+    ) -> "Component":
+        pass
 
     @classmethod
     def load(
