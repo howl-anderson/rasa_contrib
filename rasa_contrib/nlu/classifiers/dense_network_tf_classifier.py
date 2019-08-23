@@ -1,6 +1,7 @@
 import logging
 import os
 import shutil
+import json
 import tempfile
 import typing
 from typing import Any, Dict, Optional, Text
@@ -29,11 +30,12 @@ class DenseNetworkTensorFlowClassifier(Component):
                  component_config: Optional[Dict[Text, Any]] = None,
                  model_dir=None) -> None:
 
-        self.result_dir = None if 'result_dir' not in component_config else \
-        component_config['result_dir']
+        self.result_dir = None if 'result_dir' not in component_config else component_config['result_dir']
+        self.lookup_table_file = None if 'lookup_table_file' not in component_config else component_config['lookup_table_file']
 
         self.predict_fn = None
         self.model_dir = model_dir
+        self.lookup_table = None
 
         super(DenseNetworkTensorFlowClassifier, self).__init__(component_config)
 
@@ -50,7 +52,7 @@ class DenseNetworkTensorFlowClassifier(Component):
             # Adds a densely-connected layer with 64 units to the model:
             layers.Dense(64, activation='relu', input_shape=(feature_length,)),
             # Add another:
-            layers.Dense(64, activation='relu'),
+            # layers.Dense(64, activation='relu'),
             # Add a softmax layer with 10 output units:
             layers.Dense(intent_number, activation='softmax')])
 
@@ -86,7 +88,7 @@ class DenseNetworkTensorFlowClassifier(Component):
         intent_number = len(whole_intent_text_set)
         feature_length = text_feature_np_array.shape[-1]
 
-        return text_feature_np_array, intent_np_array, feature_length, intent_number
+        return text_feature_np_array, intent_np_array, feature_length, intent_number, intent_lookup_table
 
     def train(self,
               training_data: TrainingData,
@@ -94,7 +96,7 @@ class DenseNetworkTensorFlowClassifier(Component):
               **kwargs: Any) -> None:
         import tensorflow as tf
 
-        data, labels, feature_length, intent_number = self.get_input_data(training_data, config)
+        data, labels, feature_length, intent_number, intent_lookup_table = self.get_input_data(training_data, config)
 
         model = self.build_model(feature_length, intent_number)
 
@@ -105,6 +107,7 @@ class DenseNetworkTensorFlowClassifier(Component):
         tf.keras.experimental.export_saved_model(model, final_saved_model)
 
         self.result_dir = final_saved_model
+        self.lookup_table = intent_lookup_table
 
     @classmethod
     def load(
@@ -121,7 +124,54 @@ class DenseNetworkTensorFlowClassifier(Component):
             return cls(meta, model_dir)
 
     def process(self, message: Message, **kwargs: Any) -> None:
-        pass
+        import tensorflow as tf
+        import numpy as np
+
+        real_result_dir = os.path.join(self.model_dir, self.result_dir)
+        # print(real_result_dir)
+
+        if self.predict_fn is None:
+            self.predict_fn = tf.keras.experimental.load_from_saved_model(real_result_dir)
+
+        real_lookup_table_file = os.path.join(real_result_dir, self.lookup_table_file)
+        # print(real_lookup_table_file)
+
+        if self.lookup_table is None:
+            with open(real_lookup_table_file, 'rt') as fd:
+                self.lookup_table = json.load(fd)
+
+        text_feature = message.get("text_features")
+        np_feature = np.array([text_feature])
+
+        predict_np_int = self.predict_fn.predict(np_feature)
+
+        intent_score = []
+        for intent_id, score in enumerate(predict_np_int[0]):
+            # convert np.float32 to vanilla float,
+            # if not it will cause json_dumps of ujson raise exception OverflowError: Maximum recursion level reached
+            # see https://github.com/esnme/ultrajson/issues/221
+            float_score = float(score)
+            intent_score.append((float_score, intent_id))
+
+        reversed_lookup_table = {index: value for value, index in self.lookup_table.items()}
+        intent_str_score = [(k, reversed_lookup_table[v]) for k, v in intent_score]
+
+        sorted_intent_str_score = sorted(intent_str_score, key=lambda x: x[0], reverse=True)
+
+        # print(sorted_intent_str_score)
+
+        self._set_intent_output(message, sorted_intent_str_score)
+
+    def _set_intent_output(self, message, intent_score):
+        first_candidate = intent_score[0]
+        intent = {"name": first_candidate[1], "confidence": first_candidate[0]}
+
+        intent_ranking = [{"name": name,
+                           "confidence": score}
+                          for score, name in intent_score]
+
+        message.set("intent", intent, add_to_output=True)
+        message.set("intent_ranking", intent_ranking, add_to_output=True)
 
     def persist(self, file_name: Text, model_dir: Text) -> Dict[Text, Any]:
         """Persist this model into the passed directory.
@@ -136,4 +186,9 @@ class DenseNetworkTensorFlowClassifier(Component):
 
         shutil.copytree(self.result_dir, saved_model_dir)
 
-        return {'result_dir': self.name}
+        # serialize lookup table for intent string <-> intent id
+        serialized_lookup_table_file = os.path.join(saved_model_dir, 'lookup_table.json')
+        with open(serialized_lookup_table_file, 'wt') as fd:
+            json.dump(self.lookup_table, fd)
+
+        return {'result_dir': self.name, 'lookup_table_file': 'lookup_table.json'}
