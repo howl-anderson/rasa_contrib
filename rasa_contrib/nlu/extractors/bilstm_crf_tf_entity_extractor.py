@@ -3,7 +3,7 @@ import os
 import shutil
 import tempfile
 import typing
-from typing import Any, Dict, List, Optional, Text, Tuple
+from typing import Any, Dict, List, Optional, Text, Tuple, Callable
 
 from rasa.nlu.config import InvalidConfigError, RasaNLUModelConfig
 from rasa.nlu.extractors import EntityExtractor
@@ -25,11 +25,12 @@ class BilstmCrfTensorFlowEntityExtractor(EntityExtractor):
 
     def __init__(self,
                  component_config: Optional[Dict[Text, Any]] = None,
-                 model_dir=None) -> None:
+                 model_dir=None,
+                 predict_fn: Optional[Callable] = None) -> None:
 
         self.result_dir = None if 'result_dir' not in component_config else component_config['result_dir']
 
-        self.predict_fn = None
+        self.predict_fn = predict_fn
         self.model_dir = model_dir
 
         super(BilstmCrfTensorFlowEntityExtractor, self).__init__(component_config)
@@ -96,10 +97,14 @@ class BilstmCrfTensorFlowEntityExtractor(EntityExtractor):
         if cached_component:
             return cached_component
         else:
-            return cls(meta, model_dir)
+            from tensorflow.contrib import predictor
+
+            real_result_dir = os.path.join(model_dir, meta['result_dir'])
+
+            predict_fn = predictor.from_saved_model(real_result_dir)
+            return cls(meta, model_dir, predict_fn)
 
     def process(self, message: Message, **kwargs: Any) -> None:
-        from tensorflow.contrib import predictor
         from tokenizer_tools.tagset.NER.BILUO import BILUOSequenceEncoderDecoder
         from tokenizer_tools.tagset.offset.sequence import Sequence
 
@@ -107,9 +112,6 @@ class BilstmCrfTensorFlowEntityExtractor(EntityExtractor):
 
         real_result_dir = os.path.join(self.model_dir, self.result_dir)
         print(real_result_dir)
-
-        if not self.predict_fn:
-            self.predict_fn = predictor.from_saved_model(real_result_dir)
 
         input_text = message.text
 
