@@ -1,0 +1,17 @@
+# Configuration for Rasa NLU.
+# https://rasa.com/docs/rasa/nlu/components/
+language: en
+pipeline: 
+  - name: "rasa_contrib.nlu.TensorflowNLP"
+  - name: "rasa_contrib.nlu.BilstmCrfTensorFlowEntityExtractor"
+    max_steps: 600
+
+  - name: "rasa_contrib.nlu.TextCnnTensorFlowClassifier"
+    max_steps: 600
+
+# Configuration for Rasa Core.
+# https://rasa.com/docs/rasa/core/policies/
+policies:
+  - name: MemoizationPolicy
+  - name: KerasPolicy
+  - name: MappingPolicy

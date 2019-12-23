@@ -8,14 +8,14 @@ from typing import Any
 
 import numpy as np
 
-from rasa.nlu.featurizers import Featurizer
+from rasa_contrib.nlu.featurizers.base_featurizer import ContribFeaturizer
 from rasa.nlu.training_data import Message
 from rasa_contrib.utils.trainning import BatchingIterator
 
 logger = logging.getLogger(__name__)
 
 
-class BertTextFeaturizer(Featurizer):
+class BertTextFeaturizer(ContribFeaturizer):
     provides = ["text_features"]
 
     defaults = {
