@@ -1,0 +1,1 @@
+from rasa_contrib.nlu.extractors.bilstm_crf_tf_entity_extractor import BilstmCrfTensorFlowEntityExtractor

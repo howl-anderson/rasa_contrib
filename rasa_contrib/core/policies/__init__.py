@@ -1,0 +1,1 @@
+from rasa_contrib.core.policies.stacked_bilstm_tf_policy import StackedBilstmTensorFlowPolicy
