@@ -75,7 +75,6 @@ class BilstmCrfTensorFlowEntityExtractor(EntityExtractor):
         # train and evaluate model
         train_input_func = build_input_func(train_data_generator_func, config)
 
-        import pdb; pdb.set_trace()
         evaluate_result, export_results, final_saved_model = model.train_and_eval_then_save(
             train_input_func,
             None,
