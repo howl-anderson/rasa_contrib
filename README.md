@@ -22,6 +22,13 @@ Currently, it includes:
 
     Embedding+BiLSTM+CRF based NER extractor, based on PaddlePaddle
 
+* bert_text_featurizer
+    get BERT-based text vector feature
+    
+* bert_char_featurizer
+    get BERT-based char/word vector feature
+
+
 
 It also includes (but still work in progress):
 
@@ -46,13 +53,13 @@ For example, your config.yml can be:
 language: "zh"
 
 pipeline:
-  - name: "rasa_contrib.nlu.utils.tensorflow_utils.TensorflowNLP"
-  - name: "rasa_contrib.nlu.extractors.bilstm_crf_tf_entity_extractor.BilstmCrfTensorFlowEntityExtractor"
+  - name: "rasa_contrib.nlu..TensorflowNLP"
+  - name: "rasa_contrib.nlu..BilstmCrfTensorFlowEntityExtractor"
     max_steps: 600
-  - name: "rasa_contrib.nlu.classifiers.text_cnn_tf_classifier.TextCnnTensorFlowClassifier"
+  - name: "rasa_contrib.nlu.TextCnnTensorFlowClassifier"
     max_steps: 600
 
 policies:
   - name: MemoizationPolicy
-  - name: rasa_contrib.core.policies.stacked_bilstm_paddle_policy.StackedBilstmTensorFlowPolicy
+  - name: rasa_contrib.core.StackedBilstmTensorFlowPolicy
 ```
