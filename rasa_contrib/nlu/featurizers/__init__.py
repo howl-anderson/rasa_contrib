@@ -1,1 +1,2 @@
-from rasa_contrib.nlu.featurizers.bert_featurizer import BertTextFeaturizer
+from rasa_contrib.nlu.featurizers.bert_char_featurizer import BertCharFeaturizer
+from rasa_contrib.nlu.featurizers.bert_text_featurizer import BertTextFeaturizer
