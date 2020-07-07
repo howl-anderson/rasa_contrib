@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Text
 
 from rasa.nlu.components import Component
 from rasa.nlu.config import RasaNLUModelConfig
-from rasa.nlu.tokenizers import Token, Tokenizer
+from rasa.nlu.tokenizers.tokenizer import Token, Tokenizer
 from rasa.nlu.training_data import Message, TrainingData
 
 logger = logging.getLogger(__name__)
@@ -14,32 +14,26 @@ if typing.TYPE_CHECKING:
     pass
 
 
-class MicroAddonsTokenizer(Tokenizer, Component):
+class MicroAddonsTokenizer(Tokenizer):
 
     provides = ["tokens"]
 
     language_list = ["zh"]
 
     def __init__(self, component_config: Dict[Text, Any] = None) -> None:
-        self.kwargs = component_config
+        kwargs = copy.deepcopy(component_config)
+        kwargs.pop("name")
+        self.kwargs = kwargs
         super(MicroAddonsTokenizer, self).__init__(component_config)
 
     @classmethod
     def required_packages(cls) -> List[Text]:
         return ["MicroTokenizer"]
 
-    def train(self,
-              training_data: TrainingData,
-              config: RasaNLUModelConfig,
-              **kwargs: Any) -> None:
-        for example in training_data.training_examples:
-            example.set("tokens", self.tokenize(example.text))
-
-    def process(self, message: Message, **kwargs: Any) -> None:
-        message.set("tokens", self.tokenize(message.text))
-
-    def tokenize(self, text: Text) -> List[Token]:
+    def tokenize(self, message: Message, attribute: Text) -> List[Token]:
         import MicroTokenizer
+
+        text = message.get(attribute)
 
         tokenized = MicroTokenizer.cut(text, **self.kwargs)
 
