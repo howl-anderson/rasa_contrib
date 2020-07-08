@@ -1,5 +1,6 @@
 import logging
 import typing
+import copy
 from typing import Any, Dict, List, Text
 
 from rasa.nlu.components import Component
