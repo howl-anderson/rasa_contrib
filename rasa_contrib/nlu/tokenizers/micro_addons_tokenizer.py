@@ -16,16 +16,35 @@ if typing.TYPE_CHECKING:
 
 
 class MicroAddonsTokenizer(Tokenizer):
-
     provides = ["tokens"]
 
     language_list = ["zh"]
 
+    defaults = {
+        "custom_dict": None,
+        # Flag to check whether to split intents
+        "intent_tokenization_flag": False,
+        # Symbol on which intent should be split
+        "intent_split_symbol": "_",
+    }  # default don't load custom dictionary
+
     def __init__(self, component_config: Dict[Text, Any] = None) -> None:
+        super().__init__(component_config)
+
         kwargs = copy.deepcopy(component_config)
         kwargs.pop("name")
+
+        self.custom_dict = kwargs.pop("custom_dict")
         self.kwargs = kwargs
-        super(MicroAddonsTokenizer, self).__init__(component_config)
+
+        if self.custom_dict:
+            self.load_custom_dictionary(self.custom_dict)
+
+    @staticmethod
+    def load_custom_dictionary(custom_dict: Text) -> None:
+        import MicroTokenizer
+
+        MicroTokenizer.load_userdict(custom_dict)
 
     @classmethod
     def required_packages(cls) -> List[Text]:
