@@ -32,6 +32,8 @@ class DenseNetworkTensorFlowClassifier(Component):
 
         self.result_dir = None if 'result_dir' not in component_config else component_config['result_dir']
         self.lookup_table_file = None if 'lookup_table_file' not in component_config else component_config['lookup_table_file']
+        self.epoch = component_config.get("epoch", 10)
+        self.batch_size = component_config.get("batch_size", 32)
 
         self.predict_fn = None
         self.model_dir = model_dir
@@ -102,7 +104,8 @@ class DenseNetworkTensorFlowClassifier(Component):
 
         model.fit(data, labels, epochs=10, batch_size=32)
 
-        final_saved_model = './saved_model_dir'
+        final_saved_model = tempfile.TemporaryDirectory().name
+        logger.debug(f"Temperary, SavedModel are store in {final_saved_model}")
 
         tf.keras.experimental.export_saved_model(model, final_saved_model)
 
@@ -191,4 +194,4 @@ class DenseNetworkTensorFlowClassifier(Component):
         with open(serialized_lookup_table_file, 'wt') as fd:
             json.dump(self.lookup_table, fd)
 
-        return {'result_dir': self.name, 'lookup_table_file': 'lookup_table.json'}
+        return {'result_dir': self.name, 'lookup_table_file': 'lookup_table.json', "epoch": self.epoch, "batch_size": self.batch_size}
