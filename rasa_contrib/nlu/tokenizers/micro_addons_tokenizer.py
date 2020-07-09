@@ -34,8 +34,7 @@ class MicroAddonsTokenizer(Tokenizer):
         kwargs = copy.deepcopy(component_config)
         kwargs.pop("name")
 
-        self.custom_dict = kwargs.pop("custom_dict")
-        self.kwargs = kwargs
+        self.custom_dict = kwargs.pop("custom_dict", None)
 
         if self.custom_dict:
             self.load_custom_dictionary(self.custom_dict)
@@ -55,7 +54,7 @@ class MicroAddonsTokenizer(Tokenizer):
 
         text = message.get(attribute)
 
-        tokenized = MicroTokenizer.cut(text, **self.kwargs)
+        tokenized = MicroTokenizer.cut(text)
 
         tokens = []
         offset = 0
