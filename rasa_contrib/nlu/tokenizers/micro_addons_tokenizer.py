@@ -21,23 +21,23 @@ class MicroAddonsTokenizer(Tokenizer):
     language_list = ["zh"]
 
     defaults = {
+        # default don't load custom dictionary
         "custom_dict": None,
+
         # Flag to check whether to split intents
         "intent_tokenization_flag": False,
+
         # Symbol on which intent should be split
         "intent_split_symbol": "_",
-    }  # default don't load custom dictionary
+    }
 
     def __init__(self, component_config: Dict[Text, Any] = None) -> None:
-        super().__init__(component_config)
-
-        kwargs = copy.deepcopy(component_config)
-        kwargs.pop("name")
-
-        self.custom_dict = kwargs.pop("custom_dict", None)
+        self.custom_dict = component_config.pop("custom_dict", None)
 
         if self.custom_dict:
             self.load_custom_dictionary(self.custom_dict)
+
+        super().__init__(component_config)
 
     @staticmethod
     def load_custom_dictionary(custom_dict: Text) -> None:
