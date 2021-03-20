@@ -29,7 +29,7 @@ idna==2.8
 incremental==17.5.0
 -e git+git@github.com:howl-anderson/ioflow.git@a18f040b828b6298abf03833bae964767ed9cf5b#egg=ioflow
 itsdangerous==1.1.0
-Jinja2==2.10.1
+Jinja2==2.11.3
 jmespath==0.9.4
 joblib==0.13.2
 jsonschema==2.6.0
