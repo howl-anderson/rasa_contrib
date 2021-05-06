@@ -14,7 +14,7 @@ cycler==0.10.0
 decorator==4.4.0
 docutils==0.14
 Flask==1.0.2
-Flask-Cors==3.0.7
+Flask-Cors==3.0.9
 funcsigs==1.0.2
 future==0.17.1
 gast==0.2.2
