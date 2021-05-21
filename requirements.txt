@@ -76,7 +76,7 @@ scipy==1.2.1
 simplejson==3.16.0
 six==1.12.0
 tensorboard==1.13.1
-tensorflow==1.13.1
+tensorflow==2.5.0
 tensorflow-estimator==1.13.0
 termcolor==1.1.0
 tf-metrics==0.0.1
