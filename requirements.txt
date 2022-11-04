@@ -82,7 +82,7 @@ termcolor==1.1.0
 tf-metrics==0.0.1
 -e git+git@github.com:howl-anderson/tokenizer_tools.git@7dbe84eea00b4f70581aa7241a5f023466f24277#egg=tokenizer_tools
 tqdm==4.31.1
-Twisted==18.9.0
+Twisted==22.10.0
 typing==3.6.6
 ujson==1.35
 urllib3==1.24.1
